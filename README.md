@@ -127,10 +127,3 @@ http://localhost:5000
 **Sanjivanee Jarhad**
 MCA Student | Python & AI Developer
 
----
-
-## 📜 License
-
-This project is for **educational and learning purposes*
-
-Just tell me 👌
