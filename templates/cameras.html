@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Camera Management</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        body { background: #f8f9fa; }
+        .camera-card {
+            transition: transform 0.3s;
+            cursor: pointer;
+        }
+        .camera-card:hover {
+            transform: translateY(-5px);
+        }
+        .status-badge {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/dashboard">📹 Camera Management</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/dashboard">Dashboard</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" href="/cameras">Cameras</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/zones">Zones</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/live_dashboard">Live Dashboard</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/alerts">Alerts</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <!-- Alert Messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ 'danger' if category == 'error' else 'success' }} alert-dismissible fade show">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2>Camera Management</h2>
+            <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#addCameraModal">
+                <i class="fas fa-plus me-2"></i>Add Camera
+            </button>
+        </div>
+
+        <div class="row">
+            {% if cameras %}
+                {% for camera in cameras %}
+                <div class="col-md-6 col-lg-4 mb-4">
+                    <div class="card camera-card h-100">
+                        <div class="card-body position-relative">
+                            <span class="badge bg-{{ 'success' if camera[4] == 'running' else 'secondary' }} status-badge">
+                                {{ camera[4]|upper }}
+                            </span>
+                            <h5 class="card-title">{{ camera[2] }}</h5>
+                            <p class="card-text">
+                                <strong>Type:</strong> {{ camera[3] }}<br>
+                                <strong>Source:</strong> 
+                                {% if camera[3] == 'webcam' %}
+                                    Webcam (0)
+                                {% else %}
+                                    {{ camera[5] }}
+                                {% endif %}
+                            </p>
+                            <div class="btn-group w-100">
+                                {% if camera[4] == 'stopped' %}
+                                    <button class="btn btn-outline-success btn-sm" onclick="startCamera({{ camera[0] }})">
+                                        <i class="fas fa-play"></i> Start
+                                    </button>
+                                {% else %}
+                                    <button class="btn btn-outline-warning btn-sm" onclick="stopCamera()">
+                                        <i class="fas fa-stop"></i> Stop
+                                    </button>
+                                {% endif %}
+                                <button class="btn btn-outline-primary btn-sm" onclick="editCamera({{ camera[0] }})">
+                                    <i class="fas fa-edit"></i> Edit
+                                </button>
+                                <button class="btn btn-outline-danger btn-sm" onclick="deleteCamera({{ camera[0] }})">
+                                    <i class="fas fa-trash"></i> Delete
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <div class="col-12">
+                    <div class="alert alert-info text-center">
+                        <i class="fas fa-info-circle me-2"></i>
+                        No cameras configured yet. Click "Add Camera" to get started.
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+
+        <div class="text-center mt-4">
+            <a href="/dashboard" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left me-2"></i>Back to Dashboard
+            </a>
+        </div>
+    </div>
+
+    <!-- Add Camera Modal -->
+    <div class="modal fade" id="addCameraModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Add New Camera</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <form id="addCameraForm" method="POST" action="/add_camera">
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="form-label">Camera Name</label>
+                            <input type="text" class="form-control" name="name" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Camera Type</label>
+                            <select class="form-select" name="source_type" id="sourceType" onchange="toggleSourceField()" required>
+                                <option value="webcam">Webcam</option>
+                                <option value="rtsp">RTSP Stream</option>
+                                <option value="ip">IP Camera</option>
+                                <option value="video_file">Video File</option>
+                            </select>
+                        </div>
+                        <div class="mb-3" id="sourceValueField">
+                            <label class="form-label" id="sourceLabel">RTSP Stream URL</label>
+                            <input type="text" class="form-control" name="source_value" 
+                                   placeholder="e.g., rtsp://username:password@192.168.1.100:554/stream1">
+                            <small class="text-muted" id="sourceHelp">
+                                Enter the RTSP URL for your camera stream
+                            </small>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Add Camera</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function toggleSourceField() {
+            const type = document.getElementById('sourceType').value;
+            const sourceLabel = document.getElementById('sourceLabel');
+            const sourceInput = document.querySelector('input[name="source_value"]');
+            const sourceHelp = document.getElementById('sourceHelp');
+            
+            if (type === 'webcam') {
+                sourceLabel.textContent = 'Webcam Index';
+                sourceInput.placeholder = 'e.g., 0 for default webcam, 1 for second webcam';
+                sourceInput.value = '0';
+                sourceHelp.textContent = 'Enter webcam index (usually 0 for default)';
+            } else if (type === 'rtsp') {
+                sourceLabel.textContent = 'RTSP Stream URL';
+                sourceInput.placeholder = 'e.g., rtsp://username:password@192.168.1.100:554/stream1';
+                sourceHelp.textContent = 'Enter the RTSP URL for your camera stream';
+            } else if (type === 'ip') {
+                sourceLabel.textContent = 'IP Camera URL';
+                sourceInput.placeholder = 'e.g., http://192.168.1.100:8080/video';
+                sourceHelp.textContent = 'Enter the HTTP/HTTPS URL for your IP camera';
+            } else if (type === 'video_file') {
+                sourceLabel.textContent = 'Video File Path';
+                sourceInput.placeholder = 'e.g., /path/to/video.mp4';
+                sourceHelp.textContent = 'Enter the full path to the video file';
+            }
+        }
+        
+        function startCamera(cameraId) {
+            fetch(`/start_camera_management/${cameraId}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert(`Camera "${data.camera_name}" started successfully!`);
+                        location.reload();
+                    } else {
+                        alert('Error starting camera: ' + data.error);
+                    }
+                });
+        }
+        
+        function stopCamera() {
+            fetch('/stop_camera')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('Camera stopped successfully!');
+                        location.reload();
+                    }
+                });
+        }
+        
+        function editCamera(cameraId) {
+            alert(`Edit camera ${cameraId} - Implement edit functionality`);
+        }
+        
+        function deleteCamera(cameraId) {
+            if (confirm('Are you sure you want to delete this camera?')) {
+                alert(`Delete camera ${cameraId} - Implement delete functionality`);
+                // Add delete API call here
+            }
+        }
+        
+        // Initialize source field
+        toggleSourceField();
+    </script>
+</body>
+</html>

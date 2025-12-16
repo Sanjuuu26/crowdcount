@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Crowd Count - Register</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+  <style>
+    body { 
+      margin: 0; 
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+      background: #f5f6fa; 
+    }
+    .container { 
+      display: flex; 
+      height: 100vh; 
+    }
+    .left-panel { 
+      flex: 1; 
+      background: linear-gradient(135deg, #0046ad, #0078ff); 
+      color: #fff; 
+      display: flex; 
+      justify-content: center; 
+      align-items: center; 
+      flex-direction: column; 
+      padding: 2rem; 
+    }
+    .left-panel h1 { 
+      font-size: 2.5rem; 
+      margin-bottom: 1rem; 
+      font-weight: 700;
+    }
+    .left-panel p {
+      font-size: 1.1rem;
+      margin-bottom: 2rem;
+      opacity: 0.9;
+    }
+    .left-panel ul { 
+      list-style: none; 
+      padding: 0; 
+      margin: 0; 
+      text-align: left; 
+    }
+    .left-panel li { 
+      margin: 1rem 0; 
+      font-size: 1rem; 
+      display: flex;
+      align-items: center;
+    }
+    .left-panel li i { 
+      margin-right: 10px; 
+      font-size: 1.2rem;
+    }
+    .right-panel { 
+      flex: 1; 
+      background: #fff; 
+      display: flex; 
+      justify-content: center; 
+      align-items: center; 
+    }
+    .register-box { 
+      width: 380px; 
+      padding: 2rem; 
+      border-radius: 12px; 
+      box-shadow: 0 8px 24px rgba(0,0,0,0.1); 
+      background: #fff; 
+    }
+    .register-box h2 { 
+      text-align: center; 
+      margin-bottom: 1.5rem; 
+      color: #333;
+      font-weight: 600;
+    }
+    .form-group { 
+      margin-bottom: 1.2rem; 
+    }
+    .form-group label { 
+      display: block; 
+      margin-bottom: 0.5rem; 
+      font-size: 0.9rem; 
+      color: #555;
+      font-weight: 500;
+    }
+    .form-group input { 
+      width: 100%; 
+      padding: 0.8rem; 
+      border: 1px solid #ddd; 
+      border-radius: 8px; 
+      font-size: 0.95rem;
+      transition: border-color 0.3s ease;
+      box-sizing: border-box;
+    }
+    .form-group input:focus {
+      outline: none;
+      border-color: #0078ff;
+      box-shadow: 0 0 0 3px rgba(0, 120, 255, 0.1);
+    }
+    .btn-primary { 
+      width: 100%; 
+      background: #0078ff; 
+      color: #fff; 
+      padding: 0.9rem; 
+      border: none; 
+      border-radius: 8px; 
+      cursor: pointer; 
+      font-size: 1rem; 
+      font-weight: 600;
+      transition: background 0.3s ease;
+    }
+    .btn-primary:hover { 
+      background: #005fcc; 
+    }
+    .divider { 
+      text-align: center; 
+      margin: 1.5rem 0; 
+      position: relative; 
+      color: #666;
+      font-size: 0.9rem;
+    }
+    .divider::before, .divider::after { 
+      content: ""; 
+      position: absolute; 
+      top: 50%; 
+      width: 40%; 
+      height: 1px; 
+      background: #ddd; 
+    }
+    .divider::before { left: 0; }
+    .divider::after { right: 0; }
+    .social-buttons button { 
+      width: 100%; 
+      padding: 0.8rem; 
+      border: 1px solid #ddd; 
+      border-radius: 8px; 
+      margin-bottom: 0.8rem; 
+      cursor: pointer; 
+      font-size: 0.9rem; 
+      background: #fff;
+      transition: all 0.3s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .social-buttons button:hover {
+      border-color: #0078ff;
+      background: #f8f9fa;
+    }
+    .social-buttons .google { 
+      background: #fff url('https://img.icons8.com/color/16/000000/google-logo.png') no-repeat 20px center; 
+    }
+    .social-buttons .microsoft { 
+      background: #fff url('https://img.icons8.com/color/16/000000/microsoft.png') no-repeat 20px center; 
+    }
+    .login-link { 
+      text-align: center; 
+      margin-top: 1.5rem; 
+      font-size: 0.9rem; 
+      color: #666;
+    }
+    .login-link a { 
+      color: #0078ff; 
+      text-decoration: none; 
+      font-weight: 500;
+    }
+    .login-link a:hover {
+      text-decoration: underline;
+    }
+
+    /* Flash messages styling */
+    .flash-messages {
+      margin-bottom: 1rem;
+    }
+    .flash-message {
+      padding: 0.8rem;
+      border-radius: 6px;
+      margin-bottom: 0.5rem;
+      font-size: 0.9rem;
+    }
+    .flash-success {
+      background: #d4edda;
+      color: #155724;
+      border: 1px solid #c3e6cb;
+    }
+    .flash-danger {
+      background: #f8d7da;
+      color: #721c24;
+      border: 1px solid #f5c6cb;
+    }
+
+    /* Responsive design */
+    @media (max-width: 768px) {
+      .container {
+        flex-direction: column;
+      }
+      .left-panel {
+        padding: 1.5rem;
+        text-align: center;
+      }
+      .left-panel ul {
+        text-align: center;
+      }
+      .left-panel li {
+        justify-content: center;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="left-panel">
+      <h1>👥 Crowd Count</h1>
+      <p>Advanced Real-time People Counting & Analytics</p>
+      <ul>
+        <li><i class="bi bi-camera-video-fill"></i> Live CCTV & Webcam Integration</li>
+        <li><i class="bi bi-bar-chart-line-fill"></i> Real-time Analytics Dashboard</li>
+        <li><i class="bi bi-diagram-3-fill"></i> Intelligent Zone Management</li>
+        <li><i class="bi bi-graph-up-arrow"></i> Population Trend Analysis</li>
+        <li><i class="bi bi-exclamation-triangle-fill"></i> Smart Overcrowding Alerts</li>
+        <li><i class="bi bi-shield-check"></i> Secure & Private Monitoring</li>
+      </ul>
+    </div>
+
+    <div class="right-panel">
+      <div class="register-box">
+        <h2>Create Your Account</h2>
+        
+        <!-- Flash Messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}
+            <div class="flash-messages">
+              {% for category, message in messages %}
+                <div class="flash-message flash-{{ category }}">
+                  {{ message }}
+                </div>
+              {% endfor %}
+            </div>
+          {% endif %}
+        {% endwith %}
+
+        <form method="POST" action="{{ url_for('register') }}">
+          <div class="form-group">
+            <label>Full Name</label>
+            <input type="text" name="name" placeholder="Enter your full name" required value="{{ request.form.name if request.form.name }}">
+          </div>
+          <div class="form-group">
+            <label>Email Address</label>
+            <input type="email" name="email" placeholder="you@example.com" required value="{{ request.form.email if request.form.email }}">
+          </div>
+          <div class="form-group">
+            <label>Password</label>
+            <input type="password" name="password" placeholder="Create a strong password" required>
+          </div>
+          <div class="form-group">
+            <label>Confirm Password</label>
+            <input type="password" name="confirm_password" placeholder="Confirm your password" required>
+          </div>
+          <button type="submit" class="btn-primary">Create Account</button>
+        </form>
+
+        <div class="divider">Or sign up with</div>
+        <div class="social-buttons">
+          <button type="button" class="google" onclick="alert('Google signup would be implemented here')">
+            Sign up with Google
+          </button>
+          <button type="button" class="microsoft" onclick="alert('Microsoft signup would be implemented here')">
+            Sign up with Microsoft
+          </button>
+        </div>
+        <div class="login-link">
+          Already have an account? <a href="{{ url_for('login') }}">Sign in here</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Password confirmation validation
+    document.querySelector('form').addEventListener('submit', function(e) {
+      const password = document.querySelector('input[name="password"]');
+      const confirmPassword = document.querySelector('input[name="confirm_password"]');
+      
+      if (password.value !== confirmPassword.value) {
+        e.preventDefault();
+        alert('Passwords do not match. Please check your password confirmation.');
+        confirmPassword.focus();
+      }
+      
+      if (password.value.length < 6) {
+        e.preventDefault();
+        alert('Password should be at least 6 characters long.');
+        password.focus();
+      }
+    });
+
+    // Add focus effects
+    const inputs = document.querySelectorAll('input');
+    inputs.forEach(input => {
+      input.addEventListener('focus', function() {
+        this.parentElement.style.transform = 'translateY(-2px)';
+      });
+      
+      input.addEventListener('blur', function() {
+        this.parentElement.style.transform = 'translateY(0)';
+      });
+    });
+  </script>
+</body>
+</html>

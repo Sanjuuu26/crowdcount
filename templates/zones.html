@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Zone Management - Professional Tracking Overlay</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body { background: #f8f9fa; }
+    #layout { display: flex; height: 90vh; }
+    #leftPanel { width: 30%; background: #fff; border-right: 2px solid #dee2e6; padding: 15px; overflow-y: auto; }
+    #rightPanel { flex: 1; display: flex; align-items: center; justify-content: center; background: #000; position: relative; }
+    canvas { position: absolute; top: 0; left: 0; cursor: crosshair; }
+    video, img { max-width: 100%; max-height: 100%; display: block; }
+    .list-group-item { display: flex; justify-content: space-between; align-items: center; }
+    .camera-info { 
+      background: linear-gradient(135deg, #007bff, #0056b3); 
+      color: white; 
+      padding: 10px 15px; 
+      border-radius: 8px; 
+      margin-bottom: 15px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    }
+    .tracking-status {
+      padding: 8px 12px;
+      border-radius: 6px;
+      margin-bottom: 10px;
+      font-weight: bold;
+    }
+    .tracking-on { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+    .tracking-off { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+    
+    /* ensure video and canvas share same displayed size */
+    #videoContainer { width: 100%; height: 100%; display:flex; align-items:center; justify-content:center; }
+    #videoFeed, #zoneCanvas { width: 100%; height: 100%; object-fit: contain; }
+    
+    /* Control buttons */
+    .btn { margin-bottom: 8px; }
+
+    /* Make sure left panel controls appear above everything */
+    #leftPanel > * {
+      position: relative;
+      z-index: 3;
+    }
+  </style>
+</head>
+<body>
+
+<div id="layout">
+  <!-- Left Panel -->
+  <div id="leftPanel">
+    <!-- Active Camera Info -->
+    {% if session.get('current_camera_name') %}
+    <div class="camera-info">
+      <strong>📹 Active Camera:</strong> {{ session.current_camera_name }}
+      <br>
+      <small>Source: 
+        {% if session.get('video_file') %}
+          Video File
+        {% elif session.get('use_camera') %}
+          Webcam
+        {% else %}
+          Not set
+        {% endif %}
+      </small>
+      <div class="mt-2">
+        <a href="{{ url_for('cameras') }}" class="btn btn-sm btn-light">Switch Camera</a>
+      </div>
+    </div>
+    {% else %}
+    <div class="alert alert-warning">
+      <strong>⚠️ No Active Camera</strong>
+      <div class="mt-2">
+        <a href="{{ url_for('cameras') }}" class="btn btn-sm btn-warning">Select Camera</a>
+        <a href="{{ url_for('dashboard') }}" class="btn btn-sm btn-info">Upload Video</a>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Tracking Status -->
+    <div id="trackingStatus" class="tracking-status tracking-off">
+      🔴 Tracking IDs: OFF
+    </div>
+
+    <h4>⚙️ Zone Controls</h4>
+    <button id="drawBtn" class="btn btn-primary w-100 mb-2">✏️ Draw Zone</button>
+    <button id="deleteBtn" class="btn btn-danger w-100 mb-2">🗑 Delete Last Zone</button>
+    <button id="clearBtn" class="btn btn-warning w-100 mb-2">🗂 Clear All Zones</button>
+    <button id="toggleTrackingBtn" class="btn btn-success w-100 mb-2">🎯 Show Tracking IDs</button>
+
+    <form id="zonesForm" method="POST" action="{{ url_for('zones') }}">
+      <input type="hidden" name="zonesData" id="zonesData">
+      <button type="submit" class="btn btn-success w-100 mb-2">💾 Save Zones</button>
+    </form>
+
+    <div class="d-grid gap-2">
+      <a href="{{ url_for('live_dashboard') }}" class="btn btn-info">📊 Go to Live Dashboard</a>
+      <a href="{{ url_for('cameras') }}" class="btn btn-outline-primary">📹 Camera Management</a>
+      <a href="{{ url_for('alerts') }}" class="btn btn-outline-warning">🚨 Alert Settings</a>
+    </div>
+
+    <hr>
+    <h5>📋 Zones List</h5>
+    <ul id="zoneList" class="list-group">
+      {% for z in zones %}
+        <li class="list-group-item d-flex justify-content-between align-items-center">
+          {{ z['label'] }} (x:{{ z['x1'] }}, y:{{ z['y1'] }}, w:{{ z['x2']-z['x1'] }}, h:{{ z['y2']-z['y1'] }})
+        </li>
+      {% endfor %}
+    </ul>
+  </div>
+
+  <!-- Right Panel -->
+  <div id="rightPanel">
+    <div id="videoContainer" style="width: 100%; height: 100%; position: relative;">
+    {% if video_file %}
+      <video id="videoFeed" src="{{ url_for('static', filename='uploads/' ~ video_file) }}" autoplay loop muted></video>
+    {% elif session.get('use_camera') %}
+      <div class="text-center text-white" style="color: #fff;">
+        <h4>🎥 Webcam Active</h4>
+        <p>Live camera feed with zone monitoring</p>
+        <small>Drawing zones on 800x600 canvas</small>
+      </div>
+    {% else %}
+      <img src="{{ url_for('static', filename='placeholder.png') }}" alt="No video uploaded">
+    {% endif %}
+      <canvas id="zoneCanvas" width="800" height="600"></canvas>
+    </div>
+  </div>
+</div>
+
+<script>
+let showTracking = false;
+const canvas = document.getElementById("zoneCanvas");
+const ctx = canvas.getContext("2d");
+const zoneList = document.getElementById("zoneList");
+const zonesDataInput = document.getElementById("zonesData");
+const trackingStatus = document.getElementById("trackingStatus");
+
+let zones = [];
+let drawingMode = false;
+let drawing = false;
+let startX, startY;
+
+// Load existing zones from server
+{% for z in zones %}
+zones.push({
+  x: {{ z['x1'] }},
+  y: {{ z['y1'] }},
+  w: {{ z['x2'] - z['x1'] }},
+  h: {{ z['y2'] - z['y1'] }},
+  label: "{{ z['label'] }}"
+});
+{% endfor %}
+
+// Initial render
+renderEverything();
+
+// ---------------- Button Actions ----------------
+document.getElementById("drawBtn").onclick = () => {
+  drawingMode = !drawingMode;
+  if (drawingMode) {
+    document.getElementById("drawBtn").classList.add("btn-success");
+    document.getElementById("drawBtn").classList.remove("btn-primary");
+    document.getElementById("drawBtn").innerHTML = "✅ Drawing Mode ON";
+  } else {
+    document.getElementById("drawBtn").classList.add("btn-primary");
+    document.getElementById("drawBtn").classList.remove("btn-success");
+    document.getElementById("drawBtn").innerHTML = "✏️ Draw Zone";
+  }
+};
+
+document.getElementById("deleteBtn").onclick = () => {
+  if (zones.length === 0) {
+    alert("⚠️ No zones to delete");
+    return;
+  }
+  zones.pop();
+  renderZones();
+};
+
+document.getElementById("clearBtn").onclick = () => {
+  if (zones.length === 0) {
+    alert("⚠️ No zones to clear");
+    return;
+  }
+  if (confirm("Are you sure you want to clear ALL zones?")) {
+    zones = [];
+    renderZones();
+  }
+};
+
+document.getElementById("toggleTrackingBtn").onclick = () => {
+  showTracking = !showTracking;
+  if (showTracking) {
+    document.getElementById("toggleTrackingBtn").classList.add("btn-warning");
+    document.getElementById("toggleTrackingBtn").classList.remove("btn-success");
+    document.getElementById("toggleTrackingBtn").innerHTML = "❌ Hide Tracking IDs";
+    trackingStatus.className = "tracking-status tracking-on";
+    trackingStatus.innerHTML = "🟢 Tracking IDs: ON";
+  } else {
+    document.getElementById("toggleTrackingBtn").classList.add("btn-success");
+    document.getElementById("toggleTrackingBtn").classList.remove("btn-warning");
+    document.getElementById("toggleTrackingBtn").innerHTML = "🎯 Show Tracking IDs";
+    trackingStatus.className = "tracking-status tracking-off";
+    trackingStatus.innerHTML = "🔴 Tracking IDs: OFF";
+    
+    // Clear tracking display when turned off
+    renderEverything();
+  }
+  fetch("/toggle_tracking?id=" + (showTracking ? 1 : 0)).catch(()=>{});
+};
+
+// ---------------- Mouse Drawing ----------------
+canvas.addEventListener("mousedown", e => {
+  if (!drawingMode) return;
+  drawing = true;
+  const rect = canvas.getBoundingClientRect();
+  startX = e.clientX - rect.left;
+  startY = e.clientY - rect.top;
+});
+
+canvas.addEventListener("mousemove", e => {
+  if (!drawingMode || !drawing) return;
+  const rect = canvas.getBoundingClientRect();
+  const currentX = e.clientX - rect.left;
+  const currentY = e.clientY - rect.top;
+  
+  // Draw temporary rectangle while dragging
+  renderEverything(); // Redraw everything
+  
+  // Draw temporary rectangle
+  const x = Math.min(startX, currentX);
+  const y = Math.min(startY, currentY);
+  const w = Math.abs(currentX - startX);
+  const h = Math.abs(currentY - startY);
+  
+  ctx.strokeStyle = "yellow";
+  ctx.lineWidth = 2;
+  ctx.setLineDash([5, 5]);
+  ctx.strokeRect(x, y, w, h);
+  ctx.setLineDash([]);
+});
+
+canvas.addEventListener("mouseup", e => {
+  if (!drawingMode || !drawing) return;
+  drawing = false;
+  const rect = canvas.getBoundingClientRect();
+  const endX = e.clientX - rect.left;
+  const endY = e.clientY - rect.top;
+
+  const x = Math.min(startX, endX);
+  const y = Math.min(startY, endY);
+  const _w = Math.abs(endX - startX);
+  const _h = Math.abs(endY - startY);
+
+  if (_w > 10 && _h > 10) {
+    const label = prompt("Enter a label for this zone:", `Zone ${zones.length + 1}`);
+    if (label) {
+      zones.push({ x, y, w: _w, h: _h, label });
+      renderZones();
+    }
+  }
+  
+  // Clear temporary drawing
+  renderEverything();
+});
+
+// ---------------- Rendering Functions ----------------
+function renderZones() {
+  zoneList.innerHTML = '';
+  zonesDataInput.value = JSON.stringify(zones);
+
+  // Update list
+  zones.forEach((z, i) => {
+    const li = document.createElement("li");
+    li.className = "list-group-item d-flex justify-content-between align-items-center";
+    li.innerHTML = `
+      <div>
+        <strong>${z.label}</strong><br>
+        <small class="text-muted">x:${Math.round(z.x)}, y:${Math.round(z.y)}<br>
+        w:${Math.round(z.w)}, h:${Math.round(z.h)}</small>
+      </div>
+      <button class="btn btn-sm btn-outline-danger">Delete</button>
+    `;
+    li.querySelector("button").onclick = () => {
+      zones.splice(i, 1);
+      renderZones();
+    };
+    zoneList.appendChild(li);
+  });
+
+  renderEverything();
+}
+
+function drawZones() {
+  // Draw zones with labels
+  zones.forEach(z => {
+    ctx.strokeStyle = "red";
+    ctx.lineWidth = 3;
+    ctx.strokeRect(z.x, z.y, z.w, z.h);
+    
+    // Zone label background
+    ctx.fillStyle = "rgba(255, 0, 0, 0.7)";
+    const labelWidth = ctx.measureText(z.label).width + 10;
+    ctx.fillRect(z.x, z.y - 20, labelWidth, 20);
+    
+    // Zone label text
+    ctx.fillStyle = "white";
+    ctx.font = "bold 14px Arial";
+    ctx.fillText(z.label, z.x + 5, z.y - 5);
+  });
+}
+
+// updateStats is now a no-op since live stats were removed
+function updateStats() { /* intentionally empty */ }
+
+// Professional tracking display like YouTube video
+function drawTracking(persons) {
+  if (!showTracking || !persons || persons.length === 0) {
+    updateStats();
+    return;
+  }
+
+  const activeZones = new Set();
+  const currentTime = Date.now() / 1000; // Current time in seconds
+  
+  // Process each person
+  persons.forEach(p => {
+    // Ensure we have valid coordinates
+    const x1 = parseInt(p.x1);
+    const y1 = parseInt(p.y1);
+    const x2 = parseInt(p.x2);
+    const y2 = parseInt(p.y2);
+
+    if (isNaN(x1) || isNaN(y1) || isNaN(x2) || isNaN(y2)) return;
+
+    const width = x2 - x1;
+    const height = y2 - y1;
+    
+    if (width <= 0 || height <= 0) return;
+
+    // Use smoothed center coordinates from backend
+    const centerX = (p.cx !== undefined && !isNaN(p.cx)) ? parseInt(p.cx) : Math.round(x1 + width / 2);
+    const centerY = (p.cy !== undefined && !isNaN(p.cy)) ? parseInt(p.cy) : Math.round(y1 + height / 2);
+
+    // Track zone if person is in one
+    if (p.zone) {
+      activeZones.add(p.zone);
+    }
+
+    // 1. DRAW TRAILS (Ghosting effect)
+    if (p.trajectory && Array.isArray(p.trajectory) && p.trajectory.length > 1) {
+      ctx.lineJoin = "round";
+      ctx.lineCap = "round";
+      
+      // Draw fading trail lines
+      for (let i = 1; i < p.trajectory.length; i++) {
+        const point1 = p.trajectory[i-1];
+        const point2 = p.trajectory[i];
+        
+        // Calculate alpha based on age of point (fading effect)
+        const pointAge = currentTime - point2.time;
+        const maxAge = 5; // 5 seconds max trail age
+        const alpha = Math.max(0, 0.5 * (1 - pointAge / maxAge));
+        
+        if (alpha > 0) {
+          ctx.strokeStyle = `rgba(0, 255, 0, ${alpha})`;
+          ctx.lineWidth = 2 + (i / p.trajectory.length) * 3;
+          
+          ctx.beginPath();
+          ctx.moveTo(point1.x, point1.y);
+          ctx.lineTo(point2.x, point2.y);
+          ctx.stroke();
+        }
+      }
+    }
+
+    // 2. DRAW BOUNDING BOX (Green with shadow)
+    ctx.save();
+    ctx.shadowColor = "rgba(0, 0, 0, 0.5)";
+    ctx.shadowBlur = 8;
+    ctx.shadowOffsetX = 2;
+    ctx.shadowOffsetY = 2;
+    
+    ctx.strokeStyle = "#00FF00"; // Bright green
+    ctx.lineWidth = 3;
+    ctx.strokeRect(x1, y1, width, height);
+    ctx.restore();
+
+    // 3. DRAW CENTER DOT (Yellow)
+    ctx.beginPath();
+    ctx.fillStyle = "#FFFF00"; // Bright yellow
+    ctx.arc(centerX, centerY, 4, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 4. DRAW ID LABEL (Yellow with black text, centered above head)
+    const idText = `${p.id}`;
+    ctx.font = "bold 20px Arial";
+    const textWidth = ctx.measureText(idText).width;
+    
+    // Label position (centered above bounding box)
+    const labelX = centerX - textWidth / 2 - 8;
+    const labelY = y1 - 35;
+    const labelWidth = textWidth + 16;
+    const labelHeight = 28;
+
+    // Draw label background with shadow
+    ctx.save();
+    ctx.shadowColor = "rgba(0, 0, 0, 0.5)";
+    ctx.shadowBlur = 6;
+    ctx.shadowOffsetX = 2;
+    ctx.shadowOffsetY = 2;
+    
+    ctx.fillStyle = "rgba(255, 255, 0, 0.95)"; // Yellow background
+    drawRoundedRect(labelX, labelY, labelWidth, labelHeight, 6);
+    ctx.fill();
+    ctx.restore();
+
+    // Draw label text
+    ctx.fillStyle = "#000000"; // Black text
+    ctx.fillText(idText, labelX + 8, labelY + 20);
+
+    // 5. DRAW VELOCITY ARROW (Optional)
+    if (p.velocity && p.velocity.length === 2) {
+      const [vx, vy] = p.velocity;
+      const speed = Math.sqrt(vx*vx + vy*vy);
+      
+      if (speed > 1) {
+        const arrowLength = Math.min(30, speed * 10);
+        const angle = Math.atan2(vy, vx);
+        
+        const arrowEndX = centerX + Math.cos(angle) * arrowLength;
+        const arrowEndY = centerY + Math.sin(angle) * arrowLength;
+        
+        // Draw arrow line
+        ctx.strokeStyle = "rgba(255, 255, 0, 0.8)";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(centerX, centerY);
+        ctx.lineTo(arrowEndX, arrowEndY);
+        ctx.stroke();
+        
+        // Draw arrow head
+        ctx.fillStyle = "rgba(255, 255, 0, 0.8)";
+        ctx.beginPath();
+        ctx.moveTo(arrowEndX, arrowEndY);
+        ctx.lineTo(
+          arrowEndX - 8 * Math.cos(angle - Math.PI/6),
+          arrowEndY - 8 * Math.sin(angle - Math.PI/6)
+        );
+        ctx.lineTo(
+          arrowEndX - 8 * Math.cos(angle + Math.PI/6),
+          arrowEndY - 8 * Math.sin(angle + Math.PI/6)
+        );
+        ctx.closePath();
+        ctx.fill();
+      }
+    }
+  });
+
+  // no DOM stats to update
+  updateStats();
+}
+
+function drawRoundedRect(x, y, width, height, radius) {
+  ctx.beginPath();
+  ctx.moveTo(x + radius, y);
+  ctx.lineTo(x + width - radius, y);
+  ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+  ctx.lineTo(x + width, y + height - radius);
+  ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+  ctx.lineTo(x + radius, y + height);
+  ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+  ctx.lineTo(x, y + radius);
+  ctx.quadraticCurveTo(x, y, x + radius, y);
+  ctx.closePath();
+}
+
+function renderEverything() {
+  // Clear canvas completely
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  
+  // Draw zones only
+  drawZones();
+}
+
+// ---------------- Real-time Tracking ----------------
+async function updateTracking() {
+  try {
+    const res = await fetch("/api/tracking_data");
+    const data = await res.json();
+    
+    if (!showTracking) {
+      // If tracking is off, just ensure zones are drawn
+      renderEverything();
+      return;
+    }
+    
+    // Clear canvas completely first
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    // Always draw zones first (background)
+    drawZones();
+    
+    // Draw tracking if we have person data
+    if (data.persons && Array.isArray(data.persons) && data.persons.length > 0) {
+      drawTracking(data.persons);
+    } else {
+      // If no persons but tracking is on, just show zones
+      drawZones();
+      updateStats();
+    }
+
+  } catch (err) {
+    console.error("Tracking fetch error:", err);
+    renderEverything();
+  }
+}
+
+// Handle form submission
+document.getElementById("zonesForm").onsubmit = function(e) {
+  if (zones.length === 0) {
+    e.preventDefault();
+    alert("⚠️ Please create at least one zone before saving.");
+    return false;
+  }
+  return true;
+};
+
+// Poll server every 150ms for smooth updates
+setInterval(updateTracking, 150);
+
+// Initial render
+renderEverything();
+</script>
+</body>
+</html>

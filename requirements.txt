@@ -1,0 +1,11 @@
+Flask>=2.2
+gunicorn
+opencv-python-headless
+ultralytics
+deep-sort-realtime
+numpy
+werkzeug
+bcrypt
+pillow
+psycopg2-binary   # if switching to Postgres
+boto3             # if using S3
